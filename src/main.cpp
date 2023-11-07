@@ -1,17 +1,4 @@
-/*
- * MIT License (MIT)
- *
- * Copyright (c) 2018 Dereck Wonnacott <dereck@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+/* * MIT License (MIT) * * Copyright (c) 2018 Dereck Wonnacott <dereck@gmail.com> * * Permission is hereby granted, free of charge, to any person obtaining a copy * of this software and associated documentation files (the "Software"), to * deal in the Software without restriction, including without limitation the * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or * sell copies of the Software, and to permit persons to whom the Software is * furnished to do so, subject to the following conditions: * * The above copyright notice and this permission notice shall be included in * all copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -323,6 +310,15 @@ int main(int argc, char * argv[])
 
   // Register async callback function
   vs.registerAsyncPacketReceivedHandler(&user_data, BinaryAsyncMessageReceived);
+
+  // Set Antenna position
+  vec3f antenna_position(0.311, 0.227, 0.318);
+  vs.writeGpsAntennaOffset(antenna_position, false);
+  vec3f base_line_position(0.0, -0.454, 0.0);
+  vec3f base_line_uncertainty(0.01, 0.011, 0.01);
+  vs.writeGpsCompassBaseline(base_line_position, base_line_uncertainty, false);
+  ROS_INFO("Set GPS antenna settings");
+  vs.writeSettings();
 
   // You spin me right round, baby
   // Right round like a record, baby
