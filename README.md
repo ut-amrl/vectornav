@@ -1,3 +1,22 @@
+# AMRL Modifications
+
+##Add a udev rule for your vectornav device. 
+1. Use the following command to view your device attributes
+```
+udevadm info -a -p  $(udevadm info -q path -n /dev/ttyUSB0) | grep -i Serial
+```
+2. Create a udev rule in `/etc/udev/rules.d` and a file called 40-vectornav.rules. Add the line below to your file. You will need to replace the idProduct, idVendor, and vn300 values to match your device. Do not set identify your device by the KERNEL as that will change depending on the usb port that your device is plugged into. Identifying your device by the product and vendor id is more reliable.
+```
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="6001", ATTRS{idVendor}=="0403", MODE="0666", SYMLINK+="vn300"
+```
+3. Reload the udev rules
+```
+sudo udevadm control --reload-rules && udevadm trigger
+```
+4. Unplug and replug your vectornav and check that your device is now available in `/dev/vn300`
+5. Modify the serial_port key in the `params/vn300.yaml` and set it to `serial_port: /dev/vn300`
+
+
 Vectornav ROS Driver
 ====================
 
