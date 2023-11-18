@@ -15,7 +15,7 @@ imu_output_rate: 200
 
 # Device IMU Rate as set by the manufacturer (800Hz unless specified otherwise)
 # This value is used to set the serial data packet rate
-fixed_imu_rate: 800
+fixed_imu_rate: 400
 
 # Frame id to publish data in
 frame_id: Vectornav

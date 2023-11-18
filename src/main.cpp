@@ -278,6 +278,9 @@ int main(int argc, char * argv[])
   ROS_INFO("Package Receive Rate: %d Hz", package_rate);
   ROS_INFO("General Publish Rate: %d Hz", async_output_rate);
   ROS_INFO("IMU Publish Rate: %d Hz", imu_output_rate);
+  ROS_INFO("User Data IMU Stride: %d HZ", user_data.imu_stride);
+  ROS_INFO("User Data Output Stride: %d HZ", user_data.output_stride);
+  ROS_INFO("Update Rate: %d Hz", SensorImuRate / package_rate);
 
   // Set the device info for passing to the packet callback function
   user_data.device_family = vs.determineDeviceFamily();
