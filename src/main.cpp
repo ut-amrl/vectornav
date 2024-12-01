@@ -66,9 +66,13 @@ struct UserData
   bool initial_position_set = false;
 
   //Unused covariances initialized to zero's
+  vec3f gps_antennae_offset = {};
+  vec3f compass_baseline_offset = {};
   boost::array<double, 9ul> linear_accel_covariance = {};
   boost::array<double, 9ul> angular_vel_covariance = {};
   boost::array<double, 9ul> orientation_covariance = {};
+
+  vec3f magnetic_bias = {};
 
   // ROS header time stamp adjustments
   double average_time_difference{0};
@@ -90,6 +94,22 @@ boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc)
   ROS_ASSERT(rpc.getType() == XmlRpc::XmlRpcValue::TypeArray);
 
   for (int i = 0; i < 9; i++) {
+    ROS_ASSERT(rpc[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+    output[i] = (double)rpc[i];
+  }
+  return output;
+}
+
+// Basic loop so we can initilize our covariance parameters above
+vec3f setOffset(XmlRpc::XmlRpcValue rpc)
+{
+  // Output covariance vector
+  vec3f output = {0.0, 0.0, 0.0};
+
+  // Convert the RPC message to array
+  ROS_ASSERT(rpc.getType() == XmlRpc::XmlRpcValue::TypeArray);
+
+  for (int i = 0; i < 3; i++) {
     ROS_ASSERT(rpc[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
     output[i] = (double)rpc[i];
   }
@@ -176,6 +196,14 @@ int main(int argc, char * argv[])
   pn.param<int>("serial_baud", SensorBaudrate, 115200);
   pn.param<int>("fixed_imu_rate", SensorImuRate, 800);
 
+  // Call to set sensor to antennae offset
+  if (pn.getParam("gps_antennae_offset", rpc_temp)) {
+    user_data.gps_antennae_offset = setOffset(rpc_temp);
+  }
+  if (pn.getParam("compass_baseline_offset", rpc_temp)) {
+    user_data.compass_baseline_offset = setOffset(rpc_temp);
+  }
+
   //Call to set covariances
   if (pn.getParam("linear_accel_covariance", rpc_temp)) {
     user_data.linear_accel_covariance = setCov(rpc_temp);
@@ -185,6 +213,11 @@ int main(int argc, char * argv[])
   }
   if (pn.getParam("orientation_covariance", rpc_temp)) {
     user_data.orientation_covariance = setCov(rpc_temp);
+  }
+
+  // Call to set magnetic biases
+  if (pn.getParam("magnetic_bias", rpc_temp)) {
+    user_data.magnetic_bias = setOffset(rpc_temp);
   }
 
   ROS_INFO("Connecting to : %s @ %d Baud", SensorPort.c_str(), SensorBaudrate);
@@ -281,6 +314,9 @@ int main(int argc, char * argv[])
   ROS_INFO("User Data IMU Stride: %d HZ", user_data.imu_stride);
   ROS_INFO("User Data Output Stride: %d HZ", user_data.output_stride);
   ROS_INFO("Update Rate: %d Hz", SensorImuRate / package_rate);
+  ROS_INFO(
+    "Setting GPS Antennae Offset %lf %lf %lf", user_data.gps_antennae_offset[0],
+    user_data.gps_antennae_offset[1], user_data.gps_antennae_offset[2]);
 
   // Set the device info for passing to the packet callback function
   user_data.device_family = vs.determineDeviceFamily();
@@ -315,11 +351,20 @@ int main(int argc, char * argv[])
   vs.registerAsyncPacketReceivedHandler(&user_data, BinaryAsyncMessageReceived);
 
   // Set Antenna position
-  vec3f antenna_position(0.311, 0.227, 0.318);
-  vs.writeGpsAntennaOffset(antenna_position, false);
-  vec3f base_line_position(0.0, -0.454, 0.0);
-  vec3f base_line_uncertainty(0.01, 0.011, 0.01);
-  vs.writeGpsCompassBaseline(base_line_position, base_line_uncertainty, false);
+  vs.writeGpsAntennaOffset(user_data.gps_antennae_offset, false);
+
+  // Set baseline antennae position is used
+  bool isBaselineValid = false;
+  for (size_t i = 0; i < 3; ++i) {
+    if (user_data.compass_baseline_offset[i] != 0) {
+      isBaselineValid = true;
+      break;
+    }
+  }
+  if (isBaselineValid) {
+    vec3f base_line_uncertainty(0.01, 0.01, 0.01);
+    vs.writeGpsCompassBaseline(user_data.compass_baseline_offset, base_line_uncertainty, false);
+  }
   ROS_INFO("Set GPS antenna settings");
   vs.writeSettings();
 
@@ -686,7 +731,15 @@ void fill_ins_message(
 
   if (cd.hasYawPitchRoll()) {
     vec3f rpy = cd.yawPitchRoll();
-    msgINS.yaw = rpy[0];
+    for (int i = 0; i < 3; ++i) {
+      rpy[i] = rpy[i] + user_data->magnetic_bias[i];
+      if (rpy[i] > 180.0f) {
+        rpy[i] -= 360.0f;
+      } else if (rpy[i] < -180.0f) {
+        rpy[i] += 360.0f;
+      }
+    }
+    msgINS.yaw = rpy[0];  // convert to 0-360
     msgINS.pitch = rpy[1];
     msgINS.roll = rpy[2];
   }
