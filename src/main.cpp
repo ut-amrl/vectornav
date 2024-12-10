@@ -157,7 +157,14 @@ void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr & msg)
   gps_with_heading.latitude = msg->latitude;
   gps_with_heading.longitude = msg->longitude;
   gps_with_heading.altitude = msg->altitude;
-  gps_with_heading.heading = lastINSYaw;
+  // Convert yaw angle from true north to 0 at +x and positive CCW
+  double correctedYaw = -lastINSYaw + 90;
+  if (correctedYaw < 0) {
+    correctedYaw += 360;
+  } else if (correctedYaw > 360) {
+    correctedYaw -= 360;
+  }
+  gps_with_heading.heading = correctedYaw;
   pubGPSHeading.publish(gps_with_heading);
 }
 

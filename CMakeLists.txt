@@ -32,7 +32,6 @@ execute_process(
 set(AMRL_MSGS_INCLUDE_DIR "${AMRL_MSGS_PATH}/msg_gen/cpp/include")
 
 include_directories(${AMRL_MSGS_INCLUDE_DIR})
-# include_directories("/home/amrl_user/amrl/amrl_msgs/msg_gen/cpp/include")
 
 ###################################
 ## catkin specific configuration ##
