@@ -50,4 +50,4 @@ orientation_covariance: [0.01,  0.0,   0.0,
                          0.0,   0.0,   0.01]
 
 # Magnetic INS bias
-magnetic_bias: [133.0, 0.0, 0.0] # yaw pitch roll (degrees) 
+magnetic_bias: [0.0, 0.0, 0.0] # yaw pitch roll (degrees) 

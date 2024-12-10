@@ -17,6 +17,7 @@
 //#define M_PI 3.14159265358979323846  /* M_PI */
 
 // ROS Libraries
+#include <amrl_msgs/GPSMsg.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <vectornav/Ins.h>
@@ -28,10 +29,13 @@
 #include "sensor_msgs/MagneticField.h"
 #include "sensor_msgs/NavSatFix.h"
 #include "sensor_msgs/Temperature.h"
+#include "std_msgs/Float64MultiArray.h"
 #include "std_srvs/Empty.h"
 
-ros::Publisher pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
+ros::Publisher pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns, pubGPSHeading;
+ros::Subscriber subGPS;
 ros::ServiceServer resetOdomSrv;
+ros::ServiceServer resetYawSrv;
 
 XmlRpc::XmlRpcValue rpc_temp;
 
@@ -45,6 +49,12 @@ using namespace vn::math;
 using namespace vn::sensors;
 using namespace vn::protocol::uart;
 using namespace vn::xplat;
+using amrl_msgs::GPSMsg;
+
+#include <mutex>
+std::mutex lastINSMsgMutex;
+double lastINSYaw;
+vec3f magnetic_bias = {};
 
 // Method declarations for future use.
 void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index);
@@ -71,8 +81,6 @@ struct UserData
   boost::array<double, 9ul> linear_accel_covariance = {};
   boost::array<double, 9ul> angular_vel_covariance = {};
   boost::array<double, 9ul> orientation_covariance = {};
-
-  vec3f magnetic_bias = {};
 
   // ROS header time stamp adjustments
   double average_time_difference{0};
@@ -125,6 +133,34 @@ bool resetOdom(
   return true;
 }
 
+bool resetYaw(
+  std_srvs::Empty::Request & req, std_srvs::Empty::Response & resp, UserData * user_data)
+{
+  ROS_INFO("Reset Magnetic Yaw Bias Compensation to Point North");
+  lastINSMsgMutex.lock();
+  double newCompensation = (magnetic_bias[0] - lastINSYaw);
+  if (newCompensation < 0) {
+    newCompensation += 360;
+  } else if (newCompensation > 360) {
+    newCompensation -= 360;
+  }
+  magnetic_bias = vec3f(newCompensation, magnetic_bias[1], magnetic_bias[2]);
+  lastINSMsgMutex.unlock();
+  return true;
+}
+
+void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr & msg)
+{
+  // Publish the GPS heading
+  GPSMsg gps_with_heading;
+  gps_with_heading.header.stamp = msg->header.stamp;
+  gps_with_heading.latitude = msg->latitude;
+  gps_with_heading.longitude = msg->longitude;
+  gps_with_heading.altitude = msg->altitude;
+  gps_with_heading.heading = lastINSYaw;
+  pubGPSHeading.publish(gps_with_heading);
+}
+
 // Assure that the serial port is set to async low latency in order to reduce delays and package pilup.
 // These changes will stay effective until the device is unplugged
 #if __linux__ || __CYGWIN__
@@ -172,8 +208,14 @@ int main(int argc, char * argv[])
   pubPres = n.advertise<sensor_msgs::FluidPressure>("vectornav/Pres", 1000);
   pubIns = n.advertise<vectornav::Ins>("vectornav/INS", 1000);
 
+  // Custom external gps heading fusion
+  subGPS = n.subscribe("gps/filtered", 5, gpsCallback);
+  pubGPSHeading = n.advertise<GPSMsg>("/vectornav/GPSHeading", 1000);
+
   resetOdomSrv = n.advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>(
     "reset_odom", boost::bind(&resetOdom, _1, _2, &user_data));
+  resetYawSrv = n.advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>(
+    "reset_yaw", boost::bind(&resetYaw, _1, _2, &user_data));
 
   // Serial Port Settings
   string SensorPort;
@@ -217,7 +259,7 @@ int main(int argc, char * argv[])
 
   // Call to set magnetic biases
   if (pn.getParam("magnetic_bias", rpc_temp)) {
-    user_data.magnetic_bias = setOffset(rpc_temp);
+    magnetic_bias = setOffset(rpc_temp);
   }
 
   ROS_INFO("Connecting to : %s @ %d Baud", SensorPort.c_str(), SensorBaudrate);
@@ -732,11 +774,10 @@ void fill_ins_message(
   if (cd.hasYawPitchRoll()) {
     vec3f rpy = cd.yawPitchRoll();
     for (int i = 0; i < 3; ++i) {
-      rpy[i] = rpy[i] + user_data->magnetic_bias[i];
-      if (rpy[i] > 180.0f) {
-        rpy[i] -= 360.0f;
-      } else if (rpy[i] < -180.0f) {
-        rpy[i] += 360.0f;
+      rpy[i] = rpy[i] + magnetic_bias[i];
+      // [-180, 180] -> [0, 360]
+      if (rpy[i] < 0) {
+        rpy[i] += 360;
       }
     }
     msgINS.yaw = rpy[0];  // convert to 0-360
@@ -771,6 +812,12 @@ void fill_ins_message(
 
   if (cd.hasVelocityUncertaintyEstimated()) {
     msgINS.velUncertainty = cd.velocityUncertaintyEstimated();
+  }
+
+  // Lock the mutex and update the global variable
+  {
+    std::lock_guard<std::mutex> lock(lastINSMsgMutex);
+    lastINSYaw = msgINS.yaw;
   }
 }
 
