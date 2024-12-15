@@ -158,13 +158,13 @@ void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr & msg)
   gps_with_heading.longitude = msg->longitude;
   gps_with_heading.altitude = msg->altitude;
   // Convert yaw angle from true north to 0 at +x and positive CCW
-  double correctedYaw = -lastINSYaw + 90;
-  if (correctedYaw < 0) {
-    correctedYaw += 360;
-  } else if (correctedYaw > 360) {
-    correctedYaw -= 360;
-  }
-  gps_with_heading.heading = correctedYaw;
+  // double correctedYaw = -lastINSYaw + 90;
+  // if (correctedYaw < 0) {
+  //   correctedYaw += 360;
+  // } else if (correctedYaw > 360) {
+  //   correctedYaw -= 360;
+  // }
+  gps_with_heading.heading = lastINSYaw;
   pubGPSHeading.publish(gps_with_heading);
 }
 
@@ -215,10 +215,6 @@ int main(int argc, char * argv[])
   pubPres = n.advertise<sensor_msgs::FluidPressure>("vectornav/Pres", 1000);
   pubIns = n.advertise<vectornav::Ins>("vectornav/INS", 1000);
 
-  // Custom external gps heading fusion
-  subGPS = n.subscribe("gps/filtered", 5, gpsCallback);
-  pubGPSHeading = n.advertise<GPSMsg>("/vectornav/GPSHeading", 1000);
-
   resetOdomSrv = n.advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>(
     "reset_odom", boost::bind(&resetOdom, _1, _2, &user_data));
   resetYawSrv = n.advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>(
@@ -229,6 +225,8 @@ int main(int argc, char * argv[])
   int SensorBaudrate;
   int async_output_rate;
   int imu_output_rate;
+
+  string external_gps_topic;
 
   // Sensor IMURATE (800Hz by default, used to configure device)
   int SensorImuRate;
@@ -244,6 +242,12 @@ int main(int argc, char * argv[])
   pn.param<std::string>("serial_port", SensorPort, "/dev/ttyUSB0");
   pn.param<int>("serial_baud", SensorBaudrate, 115200);
   pn.param<int>("fixed_imu_rate", SensorImuRate, 800);
+  pn.param<std::string>("external_gps_topic", external_gps_topic, "/phone/gps");
+
+  // Custom external gps heading fusion
+  ROS_INFO("Listening to external gps topic at %s", external_gps_topic.c_str());
+  subGPS = n.subscribe(external_gps_topic.c_str(), 5, gpsCallback);
+  pubGPSHeading = n.advertise<GPSMsg>("/vectornav/GPSHeading", 1000);
 
   // Call to set sensor to antennae offset
   if (pn.getParam("gps_antennae_offset", rpc_temp)) {

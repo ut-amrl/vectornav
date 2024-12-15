@@ -29,6 +29,8 @@ tf_ned_to_enu: false
 # If tf_ned_to_enu = true and frame_based_enu = true we rotate the quaternion to the frame matched label by multiplication
 frame_based_enu: false
 
+# external_gps_topic: /gps/filtered
+external_gps_topic: /phone/gps
 gps_antennae_offset: [0.0, 0.0, 0.14]
 compass_baseline_offset: [0.0, 0.0, 0.0]
 
