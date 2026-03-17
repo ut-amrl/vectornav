@@ -6,6 +6,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
 
@@ -16,6 +17,12 @@ def generate_launch_description():
         default_value='vectornav',
         description='Frame ID for vectornav messages'
     )
+
+    rate_divisor_arg = DeclareLaunchArgument(
+        'rate_divisor',
+        default_value='8',
+        description='BO1 rate divisor used by VectorNav binary output (default 8 for 100hz)'
+    )
     
     # Vectornav
     start_vectornav_cmd = Node(
@@ -23,7 +30,13 @@ def generate_launch_description():
         executable='vectornav',
         output='screen',
         parameters=[os.path.join(this_dir, 'config', 'vectornav.yaml'),
-                   {'frame_id': LaunchConfiguration('frame_id')}])
+                   {
+                       'frame_id': LaunchConfiguration('frame_id'),
+                       'BO1.rateDivisor': ParameterValue(
+                           LaunchConfiguration('rate_divisor'),
+                           value_type=int
+                       ),
+                   }])
     
     start_vectornav_sensor_msgs_cmd = Node(
         package='vectornav', 
@@ -35,6 +48,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     ld.add_action(frame_id_arg)
+    ld.add_action(rate_divisor_arg)
     ld.add_action(start_vectornav_cmd)
     ld.add_action(start_vectornav_sensor_msgs_cmd)
 
