@@ -23,6 +23,18 @@ def generate_launch_description():
         default_value='8',
         description='BO1 rate divisor used by VectorNav binary output (default 8 for 100hz)'
     )
+
+    port_arg = DeclareLaunchArgument(
+        'port',
+        default_value='/dev/ttyUSB0',
+        description='Serial port device for VectorNav sensor'
+    )
+
+    baud_arg = DeclareLaunchArgument(
+        'baud',
+        default_value='230400',
+        description='Serial baud rate for VectorNav sensor'
+    )
     
     # Vectornav
     start_vectornav_cmd = Node(
@@ -32,6 +44,14 @@ def generate_launch_description():
         parameters=[os.path.join(this_dir, 'config', 'vectornav.yaml'),
                    {
                        'frame_id': LaunchConfiguration('frame_id'),
+                       'port': ParameterValue(
+                           LaunchConfiguration('port'),
+                           value_type=str
+                       ),
+                       'baud': ParameterValue(
+                           LaunchConfiguration('baud'),
+                           value_type=int
+                       ),
                        'BO1.rateDivisor': ParameterValue(
                            LaunchConfiguration('rate_divisor'),
                            value_type=int
@@ -49,6 +69,8 @@ def generate_launch_description():
 
     ld.add_action(frame_id_arg)
     ld.add_action(rate_divisor_arg)
+    ld.add_action(port_arg)
+    ld.add_action(baud_arg)
     ld.add_action(start_vectornav_cmd)
     ld.add_action(start_vectornav_sensor_msgs_cmd)
 
